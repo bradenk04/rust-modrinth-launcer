@@ -49,11 +49,45 @@ jobs:
         if: hashFiles('Cargo.toml') != ''
         run: cargo test --workspace --locked
 
-  # One stable name for branch protection, so the matrix can change without touching repo settings.
+  docs:
+    name: docs
+    runs-on: ubuntu-latest
+    env:
+      RUSTDOCFLAGS: -D warnings
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Rust
+        if: hashFiles('Cargo.toml') != ''
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: stable
+
+      - name: Cache cargo
+        if: hashFiles('Cargo.toml') != ''
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+
+      - name: Build docs
+        if: hashFiles('Cargo.toml') != ''
+        run: cargo doc --workspace --no-deps --locked
+
+  lint:
+    name: lint (typos, actionlint)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Typos
+        uses: crate-ci/typos@276087d9a4f06398b3e04825487805e2d7375888 # v1.52.2
+
+      - name: Actionlint
+        run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12 -color
+
+  # One stable name for branch protection, so the jobs can change without touching repo settings.
   ci-ok:
     name: ci-ok
-    needs: check
+    needs: [check, docs, lint]
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - run: test "${{ needs.check.result }}" = "success"
+      - run: test "${{ needs.check.result }}" = success && test "${{ needs.docs.result }}" = success && test "${{ needs.lint.result }}" = success
